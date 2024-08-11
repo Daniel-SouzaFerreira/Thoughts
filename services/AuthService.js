@@ -6,7 +6,7 @@ class AuthService {
         return await User.findOne({
              where: { 
                 email 
-            } 
+            }
         });
     }
 

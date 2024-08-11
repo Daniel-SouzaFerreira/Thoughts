@@ -1,144 +1,91 @@
-const Tought = require('../models/Tought')
-const User = require('../models/User')
-
-const { Op } = require('sequelize')
+const ToughtService = require('../services/ThoughtService')
+const { renderWithFlash, handleError } = require('../helpers/response')
 
 module.exports = class ToughtController {
     static async showToughts(req, res) {
         const search = req.query.search ? req.query.search : '';
         const order = req.query.order === 'old' ? 'ASC' : 'DESC'
 
-        const toughtsData = await Tought.findAll({
-            include: User,
-            where: {
-                title: {
-                    [Op.like]: `%${search}%`
-                }
-            },
-            order: [
-                ['createdAt', order]
-            ]
-        })
-        const toughts = toughtsData.map(result => result.get({
-            plain: true
-        }))
+        try {
+            const toughtsData = await ToughtService.findAllToughts(search, order)
+            const toughts = toughtsData.map(result => result.get({ plain: true }))
+            // 0 para handlebars não é entendido como false
+            const toughtsQty = toughtsData ? toughts.length : false;
 
-        // 0 para handlebars não é entendido como false
-        let toughtsQty = toughts.length
-        if (!toughtsData) {
-            toughtsQty = false
+            res.render('toughts/home', {
+                toughts,
+                search,
+                toughtsQty
+            })
+        } catch (error) {
+            handleError(req, res, error, 'Erro ao buscar todos pensamentos')
         }
-
-        res.render('toughts/home', {
-            toughts,
-            search,
-            toughtsQty
-        })
     }
 
-    static async dashboard(req, res) {
+    static async showDashboard(req, res) {
         const userId = req.session.userId
-        const user = await User.findOne({
-            where: {
-                id: userId
-            },
-            include: Tought,
-            plain: true
-        })
 
-        if (!user) {
-            res.redirect('/login')
-            return
+        try {
+            const user = await ToughtService.findUserWithToughts(userId)
+            if (!user) {
+                return res.redirect('/login')
+            }
+
+            const toughts = user.Toughts.map(result => result.dataValues)
+            const emptyToughts = toughts.length === 0
+            res.render('toughts/dashboard', {
+                toughts,
+                emptyToughts
+            })
+        } catch (error) {
+            handleError(req, res, error, 'Erro ao carregar dashboard do usuário')
         }
-
-        const toughts = user.Toughts.map(result => result.dataValues)
-        const emptyToughts = toughts.length === 0
-
-        res.render('toughts/dashboard', {
-            toughts,
-            emptyToughts
-        })
     }
 
-    static createTought(req, res) {
+    static showCreateToughtForm(req, res) {
         res.render('toughts/create')
     }
 
-    static async createToughtSave(req, res) {
+    static async handleToughtCreation(req, res) {
         // TODO: Chegar se o usuário informado existe
-        const tought = {
-            title: req.body.title,
-            UserId: req.session.userId
-        }
+        const title = req.body.title
+        const userId = req.session.userId
 
         try {
-            await Tought.create(tought)
-
-            req.flash('message', 'Pensamento criado com sucesso!')
-            req.session.save(() => {
-                res.redirect('/toughts/dashboard')
-            })
+            await ToughtService.createTought(title, userId)
+            renderWithFlash(req, res, 'toughts/dashboard', 'Pensamento criado com sucesso!', '/toughts/dashboard')
         } catch (error) {
-            console.log(error)
+            handleError(req, res, error, 'Erro ao criar pensamento')
         }
     }
 
     static async removeTought(req, res) {
         const id = req.body.id
-        const UserId = req.session.userId
+        const userId = req.session.userId
 
         try {
-            await Tought.destroy({
-                where: {
-                    id: id,
-                    UserId: UserId
-                }
-            })
-
-            req.flash('message', 'Pensamento removido com sucesso!')
-            req.session.save(() => {
-                res.redirect('/toughts/dashboard')
-            })
-
+            await ToughtService.removeTought(id, userId)
+            renderWithFlash(req, res, 'toughts/dashboard', 'Pensamento removido com sucesso!', '/toughts/dashboard')
         } catch (error) {
-            console.log(error)
+            handleError(req, res, error, 'Erro ao remover pensamento')
         }
-
     }
 
-    static async updateTought(req, res) {
+    static async showToughtUpdateForm(req, res) {
         const id =  req.params.id
-        const tought = await Tought.findOne({
-            where: {
-                id: id
-            },
-            raw: true
-        })
-
-        res.render('toughts/edit', {
-            tought
-        })
+        const tought = await ToughtService.findToughtById(id) 
+        res.render('toughts/edit', { tought })
     }
 
-    static async updateToughtSave(req, res) {
-        const id = req.body.id        
-        const tought = {
-            title: req.body.title,
-        }
+    static async handleToughtUpdate(req, res) {
+        const id = req.body.id 
+        const title = req.body.title
 
         try {
-            await Tought.update(tought, {
-                where: {
-                    id: id
-                }
-            })
-            req.flash('message', 'Pensamento autualizado com sucesso!')
-    
-            req.session.save(() => {
-                res.redirect('/toughts/dashboard')
-            })
+            await ToughtService.updateTought(id, title)
+            renderWithFlash(req, res, 'toughts/dashboard', 'Pensamento atualizado com sucesso!', '/toughts/dashboard')
         } catch (error) {
-            console.log(error)
+            handleError(req, res, error, 'Erro ao atualizar pensamento')
         }
     }
 }
