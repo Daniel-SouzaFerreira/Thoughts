@@ -1,6 +1,6 @@
 const User = require('../models/User')
-const bcrypt = require('bcryptjs')
 const AuthService = require('../services/AuthService')
+const { handleError } = require('../helpers/response')
 
 module.exports = class AuthController {
 
@@ -28,9 +28,7 @@ module.exports = class AuthController {
     
             AuthController.initializeSession(req, res, user.id, 'Autenticação realizada com sucesso!')
         } catch (error) {
-            console.error(error);
-            req.flash('message', 'Erro ao tentar fazer login. Tente novamente.');
-            res.redirect('/login');
+            handleError(req, res, error, 'Erro ao tentar fazer login. Tente novamente.', '/login')
         }
     }
 
@@ -62,8 +60,7 @@ module.exports = class AuthController {
             })
             AuthController.initializeSession(req, res, createdUser.id, 'Cadastro realizado com sucesso!')
         } catch (error) {
-            req.flash('message', 'Erro ao registrar novo usuário. Tente novamente.')
-            console.log(error)
+            handleError(req, res, error, 'Erro ao registrar novo usuário. Tente novamente.')
         }
     }
 
